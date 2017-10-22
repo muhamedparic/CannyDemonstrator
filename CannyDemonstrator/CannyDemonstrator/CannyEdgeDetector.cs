@@ -9,13 +9,13 @@ using System.Threading.Tasks;
 
 namespace CannyDemonstrator
 {
-    enum GaussianSize
+    public enum GaussianSize
     {
         ThreeByThree = 3,
         FiveByFive = 5
     }
 
-    struct CannyEdgeDetectorOptions
+    public class CannyEdgeDetectorOptions
     {
         public GaussianSize gaussianSize;
         public double gaussianSigma;
@@ -24,7 +24,7 @@ namespace CannyDemonstrator
         public int maxThreadCount; // 0 for same as the number of logical processors
     }
 
-    class CannyEdgeDetector
+    public class CannyEdgeDetector
     {
         private enum EdgeDirection
         {
@@ -74,11 +74,14 @@ namespace CannyDemonstrator
 
         public CannyEdgeDetector()
         {
-            options.gaussianSize = GaussianSize.ThreeByThree;
-            options.gaussianSigma = 1.4;
-            options.maxThreadCount = Utility.Clamp(Environment.ProcessorCount, 1, 8);
-            options.strongEdgeThreshold = 150;
-            options.weakEdgeThreshold = 70;
+            options = new CannyEdgeDetectorOptions
+            {
+                gaussianSize = GaussianSize.ThreeByThree,
+                gaussianSigma = 1.4,
+                maxThreadCount = Utility.Clamp(Environment.ProcessorCount, 1, 8),
+                strongEdgeThreshold = 150,
+                weakEdgeThreshold = 70
+            };
         }
 
         public void LoadImage(string originalFileName)
@@ -106,14 +109,14 @@ namespace CannyDemonstrator
         private void ConvertToGrayscale(Bitmap source, Bitmap destination)
         {
             // If confused, please read https://stackoverflow.com/a/21498304
-            destination = new Bitmap(source.Width, source.Height, PixelFormat.Format16bppGrayScale);
+            destination = new Bitmap(source.Width, source.Height, PixelFormat.Format24bppRgb);
 
             BitmapData sourceData = source.LockBits(new Rectangle(0, 0, source.Width, source.Height), ImageLockMode.ReadOnly, source.PixelFormat);
             BitmapData destinationData = destination.LockBits(new Rectangle(0, 0, destination.Width, destination.Height),
                                                               ImageLockMode.WriteOnly, destination.PixelFormat);
 
-            int sourceDepth = Image.GetPixelFormatSize(sourceData.PixelFormat) / 8;
-            int destinationDepth = 2; // 16 bit grayscale image
+            int sourceDepth = 3;
+            int destinationDepth = 3; 
 
             byte[] sourceBuffer = new byte[sourceData.Height * sourceData.Width * sourceDepth];
             byte[] destinationBuffer = new byte[destinationData.Height * destinationData.Width * destinationDepth];
@@ -132,6 +135,7 @@ namespace CannyDemonstrator
 
             source.UnlockBits(sourceData);
             destination.UnlockBits(destinationData);
+            destination.Save(@"C:\Users\Muhamed\Desktop\Coding\Images\gray.png", ImageFormat.Png);
         }
 
         private void ConvertToGrayscaleWorker(byte[] source, byte[] destination, int startIndex, int pixelCount)
@@ -139,14 +143,14 @@ namespace CannyDemonstrator
             for (int i = 0; i < pixelCount; i++)
             {
                 int pixelStartSource = startIndex + 3 * i;
-                if (pixelStartSource >= source.Length)
+                if (pixelStartSource >= source.Length - 2)
                     break;
 
-                int pixelStartDestination = startIndex + 2 * i;
+                int pixelStartDestination = startIndex + 3 * i;
                 // Maybe check for out of bounds, should not be needed
 
                 byte grayscaleValue = (byte)((source[pixelStartSource] + source[pixelStartSource + 1] + source[pixelStartSource + 2]) / 3);
-                destination[pixelStartDestination + 1] = grayscaleValue; // Maybe remove + 1 if little endian
+                destination[pixelStartDestination] = destination[pixelStartDestination + 1] = destination[pixelStartDestination + 2] = grayscaleValue;
             }
         }
     }
