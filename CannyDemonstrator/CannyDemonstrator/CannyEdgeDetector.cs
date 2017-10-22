@@ -81,8 +81,10 @@ namespace CannyDemonstrator
             options.weakEdgeThreshold = 70;
         }
 
-        public void LoadImage(Image originalImage)
+        public void LoadImage(string originalFileName)
         {
+            Image originalImage = Image.FromFile(originalFileName);
+
             if (originalImage.PixelFormat != PixelFormat.Format24bppRgb)
                 originalImage = Utility.ConvertTo24bppRgb(originalImage);
 
@@ -94,6 +96,11 @@ namespace CannyDemonstrator
 
             // Bitmaps are all initialized by the function that writes to them
             bitmapSequence[0] = new Bitmap(originalImage);
+        }
+
+        public void Run()
+        {
+            ConvertToGrayscale(bitmapSequence[0], bitmapSequence[1]);
         }
 
         private void ConvertToGrayscale(Bitmap source, Bitmap destination)
@@ -131,12 +138,15 @@ namespace CannyDemonstrator
         {
             for (int i = 0; i < pixelCount; i++)
             {
-                int pixelStart = startIndex + 3 * i;
-                if (pixelStart >= source.Length)
+                int pixelStartSource = startIndex + 3 * i;
+                if (pixelStartSource >= source.Length)
                     break;
 
-                byte grayscaleValue = (byte)((source[pixelStart] + source[pixelStart + 1] + source[pixelStart + 2]) / 3);
-                destination[pixelStart + 1] = grayscaleValue; // Maybe remove + 1 if little endian
+                int pixelStartDestination = startIndex + 2 * i;
+                // Maybe check for out of bounds, should not be needed
+
+                byte grayscaleValue = (byte)((source[pixelStartSource] + source[pixelStartSource + 1] + source[pixelStartSource + 2]) / 3);
+                destination[pixelStartDestination + 1] = grayscaleValue; // Maybe remove + 1 if little endian
             }
         }
     }
