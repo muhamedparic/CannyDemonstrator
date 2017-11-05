@@ -86,37 +86,39 @@ namespace CannyDemonstrator
 
         public void LoadImage(string originalFileName)
         {
-            Image originalImage = Image.FromFile(originalFileName);
+            Bitmap originalBitmap = Image.FromFile(originalFileName) as Bitmap;
 
-            if (originalImage.PixelFormat != PixelFormat.Format24bppRgb)
-                originalImage = Utility.ConvertTo24bppRgb(originalImage);
+            if (originalBitmap.PixelFormat != PixelFormat.Format24bppRgb)
+                originalBitmap = Utility.ConvertTo24bppRgb(originalBitmap);
 
             bitmapSequence = new Bitmap[BITMAP_COUNT];
-            derivatives = new Tuple<double, double>[originalImage.Height, originalImage.Width];
-            edgeDirections = new EdgeDirection[originalImage.Height, originalImage.Width];
-            edgeStrengths = new EdgeStrength[originalImage.Height, originalImage.Width];
+            derivatives = new Tuple<double, double>[originalBitmap.Height, originalBitmap.Width];
+            edgeDirections = new EdgeDirection[originalBitmap.Height, originalBitmap.Width];
+            edgeStrengths = new EdgeStrength[originalBitmap.Height, originalBitmap.Width];
             strongEdges = new Queue<Tuple<int, int>>();
 
             // Bitmaps are all initialized by the function that writes to them
-            bitmapSequence[0] = new Bitmap(originalImage);
+            bitmapSequence[0] = originalBitmap;
         }
 
         public void Run()
         {
-            ConvertToGrayscale(bitmapSequence[0], bitmapSequence[1]);
+            ConvertToGrayscale(bitmapSequence[0], ref bitmapSequence[1]);
+            GaussianBlur(bitmapSequence[1], ref bitmapSequence[2]);
         }
 
-        private void ConvertToGrayscale(Bitmap source, Bitmap destination)
+        private void ConvertToGrayscale(Bitmap source, ref Bitmap destination)
         {
             // If confused, please read https://stackoverflow.com/a/21498304
             destination = new Bitmap(source.Width, source.Height, PixelFormat.Format24bppRgb);
 
-            BitmapData sourceData = source.LockBits(new Rectangle(0, 0, source.Width, source.Height), ImageLockMode.ReadOnly, source.PixelFormat);
+            BitmapData sourceData = source.LockBits(new Rectangle(0, 0, source.Width, source.Height), 
+                                                    ImageLockMode.ReadOnly, source.PixelFormat);
             BitmapData destinationData = destination.LockBits(new Rectangle(0, 0, destination.Width, destination.Height),
                                                               ImageLockMode.WriteOnly, destination.PixelFormat);
 
-            int sourceDepth = 3;
-            int destinationDepth = 3; 
+            const int sourceDepth = 3;
+            const int destinationDepth = 3; 
 
             byte[] sourceBuffer = new byte[sourceData.Height * sourceData.Width * sourceDepth];
             byte[] destinationBuffer = new byte[destinationData.Height * destinationData.Width * destinationDepth];
@@ -124,10 +126,16 @@ namespace CannyDemonstrator
             Marshal.Copy(sourceData.Scan0, sourceBuffer, 0, sourceBuffer.Length);
 
             Action[] threadProcedures = new Action[options.maxThreadCount];
-            int pixelsPerThread = (int)Math.Ceiling((double)sourceData.Height * sourceData.Width / options.maxThreadCount);
+            int totalPixelCount = sourceData.Height * sourceData.Width;
+            int pixelsPerThread = (int)((double)totalPixelCount / options.maxThreadCount);
 
             for (int i = 0; i < options.maxThreadCount; i++)
-                threadProcedures[i] = () => ConvertToGrayscaleWorker(sourceBuffer, destinationBuffer, i * pixelsPerThread, pixelsPerThread);
+            {
+                int localCounter = i;
+                int currentThreadPixels = (i < options.maxThreadCount - 1) ? pixelsPerThread 
+                                                                           : (totalPixelCount - pixelsPerThread * (options.maxThreadCount - 1));
+                threadProcedures[i] = () => ConvertToGrayscaleWorker(sourceBuffer, destinationBuffer, localCounter * pixelsPerThread, currentThreadPixels);
+            }
 
             Parallel.Invoke(threadProcedures);
 
@@ -135,23 +143,27 @@ namespace CannyDemonstrator
 
             source.UnlockBits(sourceData);
             destination.UnlockBits(destinationData);
-            destination.Save(@"C:\Users\Muhamed\Desktop\Coding\Images\gray.png", ImageFormat.Png);
         }
 
-        private void ConvertToGrayscaleWorker(byte[] source, byte[] destination, int startIndex, int pixelCount)
+        private void ConvertToGrayscaleWorker(byte[] source, byte[] destination, int startPixel, int pixelCount)
         {
+            int startIndex = 3 * startPixel;
+
             for (int i = 0; i < pixelCount; i++)
             {
                 int pixelStartSource = startIndex + 3 * i;
-                if (pixelStartSource >= source.Length - 2)
-                    break;
 
                 int pixelStartDestination = startIndex + 3 * i;
                 // Maybe check for out of bounds, should not be needed
 
-                byte grayscaleValue = (byte)((source[pixelStartSource] + source[pixelStartSource + 1] + source[pixelStartSource + 2]) / 3);
+                byte grayscaleValue = (byte)((source[pixelStartSource] + source[pixelStartSource + 1] + source[pixelStartSource + 2]) / 3.0);
                 destination[pixelStartDestination] = destination[pixelStartDestination + 1] = destination[pixelStartDestination + 2] = grayscaleValue;
             }
+        }
+
+        private void GaussianBlur(Bitmap source, ref Bitmap destination)
+        {
+
         }
     }
 }
